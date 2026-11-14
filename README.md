@@ -15,7 +15,7 @@
 
 ### [▶ 지금 바로 출격하기](https://jihunyangai.github.io/pacific-ace/)
 
-설치 없이 브라우저에서 바로 플레이할 수 있습니다. (키보드 필요)
+설치 없이 브라우저에서 바로 플레이할 수 있습니다. PC(키보드)와 모바일(터치) 모두 지원합니다.
 
 <img src="screenshots/title.png" width="260" alt="타이틀 화면"> <img src="screenshots/play.png" width="260" alt="편대전"> <img src="screenshots/boss.png" width="260" alt="보스전">
 
@@ -44,6 +44,16 @@
 | `P` / `ESC` | 일시정지 |
 | `M` | 사운드 켜기/끄기 |
 | `ENTER` | 게임 시작 |
+
+**모바일 (터치)**
+
+| 조작 | 동작 |
+|---|---|
+| 화면 드래그 | 이동 (손가락이 움직인 만큼 기체가 따라옵니다) |
+| 터치 유지 | 자동 발사 |
+| `BOMB` 버튼 (오른쪽 아래) | 폭탄 투하 |
+| `II` 버튼 (왼쪽 아래) | 일시정지, 화면을 탭하면 계속 |
+| 화면 탭 | 게임 시작 |
 
 ## ✈️ RULES
 

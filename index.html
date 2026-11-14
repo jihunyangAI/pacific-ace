@@ -2,10 +2,14 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0f1a">
 <title>Pacific Ace</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #0b0f1a; overflow: hidden; }
+  html, body { margin: 0; height: 100%; background: #0b0f1a; overflow: hidden;
+    touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
   body { display: flex; align-items: center; justify-content: center; }
   canvas { background: #000; box-shadow: 0 0 40px #000; }
 </style>

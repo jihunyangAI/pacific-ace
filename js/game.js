@@ -26,7 +26,42 @@ addEventListener('keydown', e => {
   Sound.unlock();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
+// ----- 터치 (모바일): 드래그한 만큼 기체가 따라 움직이고, 닿아 있는 동안 자동 발사 -----
+let touchUI = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+const touch = { id: null, lx: 0, ly: 0, dx: 0, dy: 0 };
+const BTN_BOMB = { x: 240 - 27, y: 320 - 47, r: 18 }, BTN_PAUSE = { x: 15, y: 320 - 31, r: 10 };
+const inBtn = (b, x, y) => (x - b.x) ** 2 + (y - b.y) ** 2 < (b.r + 6) ** 2;
+function toLogical(e) {
+  const r = canvas.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H];
+}
+addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse') return;
+  e.preventDefault();
+  touchUI = true;
+  Sound.unlock();
+  const [x, y] = toLogical(e);
+  if (state !== 'play') { pressed.Enter = true; return; }        // 탭으로 시작/재시작
+  if (paused || inBtn(BTN_PAUSE, x, y)) { pressed.KeyP = true; return; }
+  if (inBtn(BTN_BOMB, x, y)) { pressed.KeyX = true; return; }
+  if (touch.id === null) { touch.id = e.pointerId; touch.lx = x; touch.ly = y; touch.dx = touch.dy = 0; }
+}, { passive: false });
+addEventListener('pointermove', e => {
+  if (e.pointerId !== touch.id) return;
+  e.preventDefault();
+  const [x, y] = toLogical(e);
+  touch.dx += (x - touch.lx) * 1.2; touch.dy += (y - touch.ly) * 1.2;
+  touch.lx = x; touch.ly = y;
+}, { passive: false });
+function touchEnd(e) {
+  if (e.pointerType !== 'mouse') Sound.unlock(); // iOS는 손을 뗄 때 오디오가 풀린다
+  if (e.pointerId === touch.id) touch.id = null;
+}
+addEventListener('pointerup', touchEnd);
+addEventListener('pointercancel', touchEnd);
+addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('blur', () => {
+  touch.id = null;
   for (const k in keys) keys[k] = false;
   if (state === 'play') { paused = true; Sound.setPaused(true); }
 });
@@ -139,7 +174,7 @@ function drawEnding() {
     if (endRecord) text('NEW RECORD!', cx, 171, 9, '#ffd27a');
   });
   show(390, () => { const [r, n] = endRank(); text(`RANK ${r}  -  ${n}`, cx, 190, 10, '#ff9a8a'); });
-  if (t > 460 && frame % 60 < 40) text('PRESS ENTER', cx, 208, 10, '#fff');
+  if (t > 460 && frame % 60 < 40) text(START_TEXT(), cx, 208, 10, '#fff');
   show(460, () => text('THANK YOU FOR PLAYING', cx, H - 8, 7, '#ffd27a'));
   if (t < 50) { ctx.fillStyle = `rgba(2,6,14,${1 - t / 50})`; ctx.fillRect(0, 0, W, H); } // 암전에서 밝아짐
 }
@@ -473,6 +508,7 @@ function killPlayer() {
 }
 function updatePlayer() {
   const p = player;
+  if (p.dead || p.entering) touch.dx = touch.dy = 0;
   if (p.dead) {
     if (p.lives > 0 && --respawnT <= 0) { // 부활: 화면 아래에서 날아 들어온다
       p.dead = false; p.entering = true; p.x = W / 2; p.y = H + 24; p.tilt = 0; p.inv = 200;
@@ -490,12 +526,15 @@ function updatePlayer() {
   const dx = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
   const dy = (keys.ArrowDown || keys.KeyS ? 1 : 0) - (keys.ArrowUp || keys.KeyW ? 1 : 0);
   const sp = 2.1 * (dx && dy ? 0.7071 : 1);
-  p.x = clamp(p.x + dx * sp, 8, W - 8);
-  p.y = clamp(p.y + dy * sp, 22, H - 26);
-  p.tilt += (dx - p.tilt) * 0.2;
+  // 터치 드래그: 쌓인 이동량을 프레임당 최대 9px씩 따라간다
+  const tx = clamp(touch.dx, -9, 9), ty = clamp(touch.dy, -9, 9);
+  touch.dx -= tx; touch.dy -= ty;
+  p.x = clamp(p.x + dx * sp + tx, 8, W - 8);
+  p.y = clamp(p.y + dy * sp + ty, 22, H - 26);
+  p.tilt += (clamp(dx + tx / 2, -1, 1) - p.tilt) * 0.2;
 
   if (p.cool > 0) p.cool--;
-  if ((keys.KeyZ || keys.Space) && p.cool <= 0) { fire(); p.cool = 6; }
+  if ((keys.KeyZ || keys.Space || touch.id !== null) && p.cool <= 0) { fire(); p.cool = 6; }
   if (p.bombCool > 0) p.bombCool--;
   if (pressed.KeyX) bomb();
 }
@@ -682,6 +721,22 @@ function drawStageText() {
     if (clearLife) text('1UP!', W / 2, 157, 10, '#9fd8a0');
   }
 }
+function drawTouchButtons() {
+  const b = BTN_BOMB, q = BTN_PAUSE, has = player.bombs > 0;
+  ctx.lineWidth = 1;
+  ctx.fillStyle = has ? 'rgba(61,155,255,0.28)' : 'rgba(255,255,255,0.08)'; circle(b.x, b.y, b.r);
+  ctx.strokeStyle = has ? 'rgba(190,225,255,0.75)' : 'rgba(255,255,255,0.25)';
+  ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke();
+  ctx.globalAlpha = has ? 0.95 : 0.35;
+  drawSprite(SPR.bomb, b.x, b.y - 3, 0, 1, 0.95);
+  text('BOMB', b.x, b.y + 13, 6, '#fff');
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(255,255,255,0.12)'; circle(q.x, q.y, q.r);
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.fillRect(q.x - 3.5, q.y - 4, 2.4, 8); ctx.fillRect(q.x + 1.1, q.y - 4, 2.4, 8);
+}
 function drawHud() {
   const p = player;
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
@@ -699,20 +754,27 @@ function drawHud() {
   }
   text(`PW${p.shot}`, W - 3, H - 4, 7, '#ff9a8a', 'right');
   if (Sound.muted) text('MUTE', W / 2, 9, 7, '#aaa');
+  if (touchUI && state === 'play' && !paused) drawTouchButtons();
 }
+const START_TEXT = () => (touchUI ? 'TAP TO START' : 'PRESS ENTER');
 function drawTitle() {
   ctx.fillStyle = 'rgba(0,10,30,0.45)'; ctx.fillRect(0, 0, W, H);
   text('PACIFIC ACE', W / 2, 78, 24, '#ffd27a');
   text('- 태평양의 에이스 -', W / 2, 96, 9, '#fff');
   drawSprite(SPR.player[(frame >> 1) & 1], W / 2, 136 + Math.sin(frame * 0.05) * 4);
-  [
+  (touchUI ? [
+    '이동     화면을 드래그',
+    '발사     터치하는 동안 자동 발사',
+    '폭탄     BOMB 버튼 (B로 보충)',
+    '일시정지 왼쪽 아래 II 버튼',
+  ] : [
     '이동     방향키 / WASD',
     '발사     Z / SPACE (누르고 있기)',
     '폭탄     X  (앞쪽에 투하, B로 보충)',
     '일시정지 P      사운드 M',
-  ].forEach((l, i) => text(l, 22, 176 + i * 13, 8, '#cfe8ff', 'left'));
+  ]).forEach((l, i) => text(l, 22, 176 + i * 13, 8, '#cfe8ff', 'left'));
   text('한 발만 맞아도 격추! 목숨은 3개', W / 2, 236, 8, '#9fd8a0');
-  if (frame % 60 < 40) text('PRESS ENTER', W / 2, 266, 12, '#fff');
+  if (frame % 60 < 40) text(START_TEXT(), W / 2, 266, 12, '#fff');
   text(`HI SCORE ${pad(hiscore)}`, W / 2, 300, 8, '#ffd27a');
 }
 function drawOver() {
@@ -720,7 +782,7 @@ function drawOver() {
   text('GAME OVER', W / 2, 130, 22, '#ff5a3c');
   text(`SCORE ${pad(score)}`, W / 2, 160, 10, '#fff');
   if (score > 0 && score >= hiscore) text('NEW RECORD!', W / 2, 178, 10, '#ffd27a');
-  if (overTimer <= 0 && frame % 60 < 40) text('PRESS ENTER', W / 2, 215, 11, '#fff');
+  if (overTimer <= 0 && frame % 60 < 40) text(START_TEXT(), W / 2, 215, 11, '#fff');
 }
 function render() {
   ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
@@ -755,6 +817,7 @@ function render() {
     else if (paused) {
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(0, 12, W, H - 26);
       text('PAUSE', W / 2, H / 2, 16, '#fff');
+      if (touchUI) text('화면을 탭하면 계속', W / 2, H / 2 + 16, 8, '#cfe8ff');
     }
   }
 }
